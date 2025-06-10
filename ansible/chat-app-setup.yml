@@ -1,0 +1,71 @@
+- name: Setup Chat App Server
+  hosts: chat_server
+  become: yes
+  tasks:
+    - name: Install Node.js and Git
+      yum:
+        name:
+          - nodejs
+          - git
+        state: present
+
+    - name: Clone chat app
+      git:
+        repo: 'https://your-repo-url/chat-app.git'
+        dest: /opt/chat-app
+
+    - name: Install app dependencies
+      npm:
+        path: /opt/chat-app
+
+    - name: Set up systemd service for chat app
+      copy:
+        dest: /etc/systemd/system/chat-app.service
+        content: |
+          [Unit]
+          Description=Chat App
+          After=network.target
+
+          [Service]
+          ExecStart=/usr/bin/node /opt/chat-app/app.js
+          Restart=always
+          User=nobody
+          Environment=PATH=/usr/bin:/usr/local/bin
+          Environment=NODE_ENV=production
+
+          [Install]
+          WantedBy=multi-user.target
+
+    - name: Reload and start service
+      systemd:
+        name: chat-app
+        enabled: yes
+        state: started
+
+    - name: Install Nginx
+      yum:
+        name: nginx
+        state: present
+
+    - name: Configure Nginx reverse proxy
+      copy:
+        dest: /etc/nginx/conf.d/chat.conf
+        content: |
+          server {
+              listen 80;
+              server_name your-domain.com;
+
+              location / {
+                  proxy_pass http://localhost:3000;
+                  proxy_http_version 1.1;
+                  proxy_set_header Upgrade $http_upgrade;
+                  proxy_set_header Connection 'upgrade';
+                  proxy_set_header Host $host;
+                  proxy_cache_bypass $http_upgrade;
+              }
+          }
+
+    - name: Restart Nginx
+      service:
+        name: nginx
+        state: restarted

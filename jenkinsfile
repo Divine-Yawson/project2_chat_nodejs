@@ -1,0 +1,34 @@
+pipeline {
+    agent any
+
+    environment {
+        EC2_IP = "YOUR.EC2.ELASTIC.IP"           // Replace this
+        SSH_KEY = credentials('chat-app-key')    // Jenkins credential ID for your PEM key
+    }
+
+    stages {
+        stage('Checkout') {
+            steps {
+                git branch: 'main', url: 'https://github.com/your-username/chat-app.git'
+            }
+        }
+
+        stage('Run Ansible Playbook') {
+            steps {
+                sh '''
+                ansible-playbook -i ansible/inventory.ini ansible/chat-app-setup.yml \
+                  --private-key=$SSH_KEY --user=ec2-user
+                '''
+            }
+        }
+    }
+
+    post {
+        success {
+            echo "Deployment successful!"
+        }
+        failure {
+            echo "Deployment failed."
+        }
+    }
+}
