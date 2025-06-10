@@ -1,0 +1,46 @@
+# Node.js dependencies
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Runtime files
+*.log
+pids
+*.pid
+*.seed
+*.pid.lock
+
+# Environment variables
+.env
+.env.*
+
+# System files
+.DS_Store
+Thumbs.db
+
+# VS Code config
+.vscode/
+
+# Terraform
+*.tfstate
+*.tfstate.backup
+.terraform/
+crash.log
+terraform.tfvars
+terraform.tfvars.json
+
+# SSH keys (never commit private keys)
+*.pem
+*.key
+id_rsa
+id_rsa.pub
+
+# Jenkins workspace and build artifacts
+/workspace/
+/builds/
+
+# Temporary files
+*.swp
+*.bak
+*.tmp
