@@ -39,7 +39,7 @@
 
     - name: Create systemd service for chat app
       copy:
-        dest: /etc/systemd/system/chatapp.service
+        dest: /etc/systemd/system/chat-app.service
         content: |
           [Unit]
           Description=Node.js Chat App
@@ -54,14 +54,11 @@
 
           [Install]
           WantedBy=multi-user.target
-
-    - name: Reload systemd
-      systemd:
-        daemon_reload: true
+      notify: Reload systemd
 
     - name: Enable and start chat app service
       systemd:
-        name: chatapp
+        name: chat-app
         enabled: true
         state: started
 
@@ -93,3 +90,7 @@
         name: nginx
         state: restarted
         enabled: true
+
+  handlers:
+    - name: Reload systemd
+      command: systemctl daemon-reload
