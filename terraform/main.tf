@@ -1,8 +1,8 @@
 provider "aws" {
-  region = "us-east-1" # change to your region if needed
+  region = "us-east-1" # change if needed
 }
 
-# Get the latest Amazon Linux 2023 AMI
+# Get latest Amazon Linux 2023 AMI
 data "aws_ami" "amazon_linux" {
   most_recent = true
   owners      = ["amazon"]
@@ -16,49 +16,27 @@ data "aws_ami" "amazon_linux" {
     name   = "architecture"
     values = ["x86_64"]
   }
-
-  filter {
-    name   = "virtualization-type"
-    values = ["hvm"]
-  }
 }
 
-# Get the default VPC
+# Default VPC
 data "aws_vpc" "default" {
   default = true
 }
 
-# Get all default subnets in that VPC
-data "aws_subnets" "default" {
-  filter {
-    name   = "vpc-id"
-    values = [data.aws_vpc.default.id]
-  }
-
-  filter {
-    name   = "default-for-az"
-    values = ["true"]
-  }
+# First available subnet in default VPC
+data "aws_subnet_ids" "default" {
+  vpc_id = data.aws_vpc.default.id
 }
 
-# Select the first default subnet
-locals {
-  selected_subnet_id = data.aws_subnets.default.ids[0]
+data "aws_subnet" "default" {
+  id = data.aws_subnet_ids.default.ids[0]
 }
 
-# Security Group allowing HTTP, HTTPS, SSH
-resource "aws_security_group" "chat_sg" {
-  name        = "chat-sg"
-  description = "Allow HTTP, HTTPS and SSH"
+# Security Group
+resource "aws_security_group" "chat_app_sg" {
+  name        = "chat-app-sg"
+  description = "Allow HTTP, HTTPS, and SSH"
   vpc_id      = data.aws_vpc.default.id
-
-  ingress {
-    description = "SSH"
-    from_port   = 22
-    to_port     = 22
-    protocol    = "tcp"
-    cidr_blocks = ["0.0.0.0/0"]
-  }
 
   ingress {
     description = "HTTP"
@@ -76,7 +54,16 @@ resource "aws_security_group" "chat_sg" {
     cidr_blocks = ["0.0.0.0/0"]
   }
 
+  ingress {
+    description = "SSH"
+    from_port   = 22
+    to_port     = 22
+    protocol    = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
   egress {
+    description = "Allow all outbound"
     from_port   = 0
     to_port     = 0
     protocol    = "-1"
@@ -84,21 +71,34 @@ resource "aws_security_group" "chat_sg" {
   }
 }
 
-# EC2 instance
-resource "aws_instance" "chat_server" {
-  ami                         = data.aws_ami.amazon_linux.id
-  instance_type               = "t3.micro"
-  key_name                    = "tonykey"
-  subnet_id                   = local.selected_subnet_id
-  vpc_security_group_ids      = [aws_security_group.chat_sg.id]
-  associate_public_ip_address = true
+# EC2 Instance
+resource "aws_instance" "chat_app" {
+  ami                    = data.aws_ami.amazon_linux.id
+  instance_type          = "t3.medium"
+  subnet_id              = data.aws_subnet.default.id
+  vpc_security_group_ids = [aws_security_group.chat_app_sg.id]
+  key_name               = "tonykey"
+
+  user_data = <<-EOF
+              #!/bin/bash
+              dnf update -y
+              dnf install -y python3 pip git
+              pip3 install --upgrade pip
+              pip3 install ansible
+              EOF
+
+  root_block_device {
+    volume_size = 16
+    volume_type = "gp2"
+  }
 
   tags = {
-    Name = "NodeChatApp"
+    Name = "chat-app-instance"
   }
 }
 
-# Allocate and associate an Elastic IP
-resource "aws_eip" "chat_eip" {
-  instance = aws_instance.chat_server.id
+# Optional: Elastic IP
+resource "aws_eip" "chat_app_eip" {
+  instance = aws_instance.chat_app.id
+  vpc      = true
 }

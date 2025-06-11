@@ -7,16 +7,8 @@
     app_dir: /home/ec2-user/chat-app
 
   tasks:
-    - name: Enable Node.js 18 via amazon-linux-extras
-      shell: amazon-linux-extras enable nodejs18
-      args:
-        creates: /etc/yum.repos.d/amzn2-core.repo
-
-    - name: Clean and update yum cache
-      command: yum clean metadata
-
-    - name: Install Node.js, Git, and Nginx
-      yum:
+    - name: Install Node.js 18, Git, and Nginx (Amazon Linux 2023)
+      dnf:
         name:
           - nodejs
           - git
