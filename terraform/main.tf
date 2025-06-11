@@ -1,8 +1,8 @@
 provider "aws" {
-  region = "us-east-1" # change if needed
+  region = "us-east-1" # Change if needed
 }
 
-# Get latest Amazon Linux 2023 AMI
+# Get the latest Amazon Linux 2023 AMI
 data "aws_ami" "amazon_linux" {
   most_recent = true
   owners      = ["amazon"]
@@ -18,18 +18,24 @@ data "aws_ami" "amazon_linux" {
   }
 }
 
-# Default VPC
+# Get the default VPC
 data "aws_vpc" "default" {
   default = true
 }
 
-# First available subnet in default VPC
-data "aws_subnet_ids" "default" {
-  vpc_id = data.aws_vpc.default.id
-}
-
+# Get the default subnet (first one found)
 data "aws_subnet" "default" {
-  id = data.aws_subnet_ids.default.ids[0]
+  filter {
+    name   = "default-for-az"
+    values = ["true"]
+  }
+
+  filter {
+    name   = "vpc-id"
+    values = [data.aws_vpc.default.id]
+  }
+
+  availability_zone = "us-east-1a" # Adjust if needed
 }
 
 # Security Group
@@ -71,7 +77,7 @@ resource "aws_security_group" "chat_app_sg" {
   }
 }
 
-# EC2 Instance
+# EC2 instance
 resource "aws_instance" "chat_app" {
   ami                    = data.aws_ami.amazon_linux.id
   instance_type          = "t3.medium"
@@ -97,8 +103,7 @@ resource "aws_instance" "chat_app" {
   }
 }
 
-# Optional: Elastic IP
+# Elastic IP (optional)
 resource "aws_eip" "chat_app_eip" {
   instance = aws_instance.chat_app.id
-  vpc      = true
 }
