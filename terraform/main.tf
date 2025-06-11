@@ -1,24 +1,67 @@
 provider "aws" {
-  region = "us-east-1"
+  region = "us-east-1" # change to your region if needed
 }
 
-resource "aws_key_pair" "chat_key" {
-  key_name   = "chat-app-key"
-  public_key = file("~/.ssh/id_rsa.pub")
+# Get the latest Amazon Linux 2023 AMI
+data "aws_ami" "amazon_linux" {
+  most_recent = true
+  owners      = ["amazon"]
+
+  filter {
+    name   = "name"
+    values = ["al2023-ami-*-x86_64"]
+  }
+
+  filter {
+    name   = "architecture"
+    values = ["x86_64"]
+  }
+
+  filter {
+    name   = "virtualization-type"
+    values = ["hvm"]
+  }
 }
 
+# Get the default VPC
+data "aws_vpc" "default" {
+  default = true
+}
+
+# Get all default subnets in that VPC
+data "aws_subnets" "default" {
+  filter {
+    name   = "vpc-id"
+    values = [data.aws_vpc.default.id]
+  }
+
+  filter {
+    name   = "default-for-az"
+    values = ["true"]
+  }
+}
+
+# Select the first default subnet
+locals {
+  selected_subnet_id = data.aws_subnets.default.ids[0]
+}
+
+# Security Group allowing HTTP, HTTPS, SSH
 resource "aws_security_group" "chat_sg" {
   name        = "chat-sg"
-  description = "Allow HTTP, HTTPS, and SSH"
+  description = "Allow HTTP, HTTPS and SSH"
+  vpc_id      = data.aws_vpc.default.id
 
   ingress {
+    description = "SSH"
     from_port   = 22
     to_port     = 22
     protocol    = "tcp"
-    cidr_blocks = ["YOUR_IP/32"] # Change to your IP
+    cidr_blocks = ["0.0.0.0/0"]
   }
 
   ingress {
+    description = "HTTP"
     from_port   = 80
     to_port     = 80
     protocol    = "tcp"
@@ -26,6 +69,7 @@ resource "aws_security_group" "chat_sg" {
   }
 
   ingress {
+    description = "HTTPS"
     from_port   = 443
     to_port     = 443
     protocol    = "tcp"
@@ -40,81 +84,21 @@ resource "aws_security_group" "chat_sg" {
   }
 }
 
-data "aws_ami" "amazon_linux" {
-  most_recent = true
-  owners      = ["amazon"]
-
-  filter {
-    name   = "name"
-    values = ["amzn2-ami-hvm-*-x86_64-gp2"]
-  }
-}
-
+# EC2 instance
 resource "aws_instance" "chat_server" {
-  ami                    = data.aws_ami.amazon_linux.id
-  instance_type          = "t2.micro"
-  key_name               = aws_key_pair.chat_key.key_name
-  vpc_security_group_ids = [aws_security_group.chat_sg.id]
-
-  user_data = <<-EOF
-              #!/bin/bash
-              yum update -y
-              amazon-linux-extras enable epel
-              yum install -y git nginx nodejs npm
-              systemctl start nginx
-              systemctl enable nginx
-
-              git clone https://github.com/YOUR_USERNAME/chat-app.git /home/ec2-user/chat-app
-              cd /home/ec2-user/chat-app
-              npm install
-
-              cat <<EOL > /etc/systemd/system/chat-app.service
-              [Unit]
-              Description=Node.js Chat App
-              After=network.target
-
-              [Service]
-              ExecStart=/usr/bin/node /home/ec2-user/chat-app/app.js
-              Restart=always
-              User=ec2-user
-              Environment=PATH=/usr/bin:/usr/local/bin
-              Environment=NODE_ENV=production
-
-              [Install]
-              WantedBy=multi-user.target
-              EOL
-
-              systemctl daemon-reexec
-              systemctl daemon-reload
-              systemctl start chat-app
-              systemctl enable chat-app
-
-              cat <<EOL > /etc/nginx/conf.d/chat.conf
-              server {
-                  listen 80;
-                  server_name _;
-
-                  location / {
-                      proxy_pass http://localhost:3000;
-                      proxy_http_version 1.1;
-                      proxy_set_header Upgrade \$http_upgrade;
-                      proxy_set_header Connection 'upgrade';
-                      proxy_set_header Host \$host;
-                      proxy_cache_bypass \$http_upgrade;
-                  }
-              }
-              EOL
-
-              systemctl restart nginx
-              EOF
+  ami                         = data.aws_ami.amazon_linux.id
+  instance_type               = "t3.micro"
+  key_name                    = "tonykey"
+  subnet_id                   = local.selected_subnet_id
+  vpc_security_group_ids      = [aws_security_group.chat_sg.id]
+  associate_public_ip_address = true
 
   tags = {
-    Name = "NodeChatServer"
+    Name = "NodeChatApp"
   }
 }
 
+# Allocate and associate an Elastic IP
 resource "aws_eip" "chat_eip" {
   instance = aws_instance.chat_server.id
-  vpc      = true
-  depends_on = [aws_instance.chat_server]
 }

@@ -1,59 +1,69 @@
-- name: Setup Chat App Server
+---
+- name: Setup Node.js Chat App with Nginx Reverse Proxy
   hosts: chat_server
-  become: yes
+  become: true
+
+  vars:
+    app_dir: /home/ec2-user/chat-app
+
   tasks:
-    - name: Install Node.js and Git
+    - name: Install Node.js 18 and Git
+      amazon.aws.amazon_linux_extras:
+        name: "nodejs18"
+        state: enabled
+
+    - name: Install required packages
       yum:
         name:
           - nodejs
           - git
+          - nginx
         state: present
 
-    - name: Clone chat app
-      git:
-        repo: 'https://your-repo-url/chat-app.git'
-        dest: /opt/chat-app
-
-    - name: Install app dependencies
-      npm:
-        path: /opt/chat-app
-
-    - name: Set up systemd service for chat app
+    - name: Clone chat app repo (if you put it on GitHub) or use local copy
       copy:
-        dest: /etc/systemd/system/chat-app.service
+        src: ./chat-app/
+        dest: "{{ app_dir }}"
+        owner: ec2-user
+        group: ec2-user
+        mode: 0755
+
+    - name: Install npm dependencies
+      command: npm install
+      args:
+        chdir: "{{ app_dir }}"
+
+    - name: Create systemd service for chat app
+      copy:
+        dest: /etc/systemd/system/chatapp.service
         content: |
           [Unit]
-          Description=Chat App
+          Description=Node.js Chat App
           After=network.target
 
           [Service]
-          ExecStart=/usr/bin/node /opt/chat-app/app.js
+          ExecStart=/usr/bin/node {{ app_dir }}/app.js
           Restart=always
-          User=nobody
-          Environment=PATH=/usr/bin:/usr/local/bin
-          Environment=NODE_ENV=production
+          User=ec2-user
+          Environment=PORT=3000
+          WorkingDirectory={{ app_dir }}
 
           [Install]
           WantedBy=multi-user.target
 
-    - name: Reload and start service
+    - name: Enable and start chat app service
       systemd:
-        name: chat-app
-        enabled: yes
+        name: chatapp
+        enabled: true
         state: started
 
-    - name: Install Nginx
-      yum:
-        name: nginx
-        state: present
-
-    - name: Configure Nginx reverse proxy
+    - name: Configure Nginx as reverse proxy
       copy:
-        dest: /etc/nginx/conf.d/chat.conf
+        dest: /etc/nginx/conf.d/chatapp.conf
         content: |
           server {
               listen 80;
-              server_name your-domain.com;
+              server_name _;
 
               location / {
                   proxy_pass http://localhost:3000;
@@ -65,7 +75,13 @@
               }
           }
 
+    - name: Remove default nginx config if present
+      file:
+        path: /etc/nginx/conf.d/default.conf
+        state: absent
+
     - name: Restart Nginx
-      service:
+      systemd:
         name: nginx
         state: restarted
+        enabled: true
