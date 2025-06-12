@@ -1,34 +1,46 @@
 pipeline {
     agent any
 
+    tools {
+        nodejs 'Node 18'  // Ensure this matches your Jenkins NodeJS tool name
+    }
+
     environment {
-        EC2_IP = "YOUR.EC2.ELASTIC.IP"           // Replace this
-        SSH_KEY = credentials('chat-app-key')    // Jenkins credential ID for your PEM key
+        APP_DIR = '/home/ec2-user/chat-app'
     }
 
     stages {
-        stage('Checkout') {
+        stage('Clone Repository') {
             steps {
-                git branch: 'main', url: 'https://github.com/your-username/chat-app.git'
+                git url: 'https://github.com/your-username/project2_chat_nodejs.git', branch: 'project2'
             }
         }
 
-        stage('Run Ansible Playbook') {
+        stage('Install Dependencies') {
             steps {
-                sh '''
-                ansible-playbook -i ansible/inventory.ini ansible/chat-app-setup.yml \
-                  --private-key=$SSH_KEY --user=ec2-user
-                '''
+                dir('chat-app') {
+                    sh 'npm install'
+                }
+            }
+        }
+
+        stage('Deploy App') {
+            steps {
+                // Sync files to live app dir (skip node_modules)
+                sh 'rsync -av --exclude=node_modules chat-app/ $APP_DIR/'
+
+                // Restart Node.js app
+                sh 'sudo systemctl restart chat-app'
             }
         }
     }
 
     post {
         success {
-            echo "Deployment successful!"
+            echo "Deployment completed successfully!"
         }
         failure {
-            echo "Deployment failed."
+            echo "Deployment failed!"
         }
     }
 }
