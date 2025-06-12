@@ -8,7 +8,7 @@ pipeline {
     stages {
         stage('Clone Repository') {
             steps {
-                git url: 'https://github.com/Divine-Yawson/project2_chat_nodejs.git', branch: 'project2'
+                git url: 'https://github.com/Divine-Yawson/project2_chat_nodejs.git', branch: 'dev'
             }
         }
 
