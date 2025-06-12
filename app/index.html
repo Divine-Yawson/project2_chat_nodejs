@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>CEEYIT Real-Time Chat App</title>
+  <script src="/socket.io/socket.io.js"></script>
+</head>
+<body>
+  <h1>CEEYIT Real-Time Chat App</h1>
+  <p>Status: <span id="status">Disconnected</span></p>
+
+  <div id="chat">
+    <ul id="messages"></ul>
+    <input id="messageInput" placeholder="Type your message..." autocomplete="off" />
+    <button onclick="sendMessage()">Send</button>
+  </div>
+
+  <script>
+    const socket = io();
+
+    socket.on('connect', () => {
+      document.getElementById('status').textContent = 'Connected';
+    });
+
+    socket.on('disconnect', () => {
+      document.getElementById('status').textContent = 'Disconnected';
+    });
+
+    socket.on('chat message', (msg) => {
+      const li = document.createElement('li');
+      li.textContent = msg;
+      document.getElementById('messages').appendChild(li);
+    });
+
+    function sendMessage() {
+      const input = document.getElementById('messageInput');
+      const message = input.value;
+      if (message.trim() !== '') {
+        socket.emit('chat message', message);
+        input.value = '';
+      }
+    }
+  </script>
+</body>
+</html>
