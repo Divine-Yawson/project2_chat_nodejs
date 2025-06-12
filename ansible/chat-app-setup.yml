@@ -7,12 +7,13 @@
     app_dir: /home/ec2-user/chat-app
 
   tasks:
-    - name: Install Node.js 18, Git, and Nginx (Amazon Linux 2023)
+    - name: Install Node.js 18, Git, Nginx, and rsync
       dnf:
         name:
           - nodejs
           - git
           - nginx
+          - rsync
         state: present
 
     - name: Create app directory
@@ -23,13 +24,16 @@
         group: ec2-user
         mode: '0755'
 
-    - name: Copy app files
-      copy:
+    - name: Sync app files using rsync (excluding node_modules and .git)
+      synchronize:
         src: ../chat-app/
         dest: "{{ app_dir }}"
-        owner: ec2-user
-        group: ec2-user
-        mode: '0755'
+        recursive: yes
+        delete: no
+        rsync_opts:
+          - "--exclude=node_modules"
+          - "--exclude=.git"
+      delegate_to: localhost
 
     - name: Install Node.js dependencies
       command: npm install
@@ -54,13 +58,16 @@
 
           [Install]
           WantedBy=multi-user.target
-      notify: Reload systemd
+
+    - name: Reload systemd
+      systemd:
+        daemon_reload: true
 
     - name: Enable and start chat app service
       systemd:
         name: chat-app
         enabled: true
-        state: started
+        state: restarted
 
     - name: Configure Nginx as reverse proxy
       copy:
@@ -71,7 +78,7 @@
               server_name _;
 
               location / {
-                  proxy_pass http://localhost:3000;
+                  proxy_pass http://localhost:3001;
                   proxy_http_version 1.1;
                   proxy_set_header Upgrade $http_upgrade;
                   proxy_set_header Connection 'upgrade';
@@ -90,7 +97,3 @@
         name: nginx
         state: restarted
         enabled: true
-
-  handlers:
-    - name: Reload systemd
-      command: systemctl daemon-reload
