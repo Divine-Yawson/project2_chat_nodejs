@@ -22,7 +22,7 @@ pipeline {
 
         stage('Deploy App') {
             steps {
-                sh 'rsync -av --exclude=node_modules chat-app/ $APP_DIR/'
+                sh 'sudo rsync -av --exclude=node_modules chat-app/ $APP_DIR/'
                 sh 'sudo systemctl restart chat-app'
             }
         }
